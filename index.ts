@@ -1,6 +1,6 @@
 import process from "process";
 import { URL } from "url";
-import { createServer } from "http";
+import { createServer, request } from "http";
 import net from "net";
 
 interface Config {
@@ -13,7 +13,7 @@ interface Config {
 }
 
 function loadConfig(): Config {
-  const urlEnvKey = "ESCALATOR_HTTPS_PROXY";
+  const urlEnvKey = "ESCALATOR_HTTP_PROXY";
 
   const url = process.env[urlEnvKey];
   if (!url) {
@@ -35,7 +35,40 @@ function loadConfig(): Config {
 
 const config = loadConfig();
 
-const httpServer = createServer((req, res) => {}).listen(config.escalatorPort);
+const httpServer = createServer((req, res) => {
+  console.log(`${new Date().toJSON()} ${req.method} ${req.url}`);
+
+  if (!req.url) {
+    res.destroy();
+    return;
+  }
+
+  const headersWithAuth = {
+    ...req.headers,
+    "Proxy-Authorization": `Basic ${Buffer.from(
+      `${config.username}:${config.password}`
+    ).toString("base64")}`,
+  };
+
+  const remoteRequest = request({
+    host: config.host,
+    port: config.port,
+    method: req.method,
+    path: req.url,
+    headers: headersWithAuth,
+  })
+    .on("error", () => {
+      res.writeHead(502).end();
+    })
+    .on("timeout", () => {
+      res.writeHead(504).end();
+    })
+    .on("response", (remoteResponse) => {
+      res.writeHead(remoteResponse.statusCode!, remoteResponse.headers);
+      remoteResponse.pipe(res);
+    });
+  req.pipe(remoteRequest);
+}).listen(config.escalatorPort);
 
 httpServer.on("connect", (req, socket, head) => {
   console.log(`${new Date().toJSON()} ${req.method} ${req.url}`);
