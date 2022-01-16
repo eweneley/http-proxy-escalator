@@ -7,8 +7,8 @@
     "start": "ts-node index.ts",
     "dev": "nodemon"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "eweneley",
+  "license": "MIT",
   "nodemonConfig": {
     "watch": [
       "index.ts",
